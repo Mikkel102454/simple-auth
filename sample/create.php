@@ -24,9 +24,9 @@ $form->el('br');
 $form->el('label')->te('Repeat Password');
 $form->el('input',['name'=>'password_confirm','id'=>'password_confirm','required','type'=>'password']);
 $form->el('br');
-$form->el('label')->te('Use confirmation');
-$form->el('input',['name'=>'confirmation','type'=>'checkbox']);
-$form->el('br');
+//$form->el('label')->te('Use confirmation');
+//$form->el('input',['name'=>'confirmation','type'=>'checkbox']);
+//->el('br');
 
 if(isset($_GET['error'])) {
 	$form->el('pre',['style'=>'color:red;'])->te($_GET['error']);

@@ -11,11 +11,11 @@ $form->el('input',['name'=>'username','required','hidden','value'=>empty($_GET['
 
 $form->el('label')->te('2FA code');
 $form->el('input', [
+    'required',
     'name' => 'totp',
     'inputmode' => 'numeric',
     'pattern' => '[0-9]{6}',
     'maxlength' => '6',
-    'autocomplete' => 'one-time-code'
 ]);
 $form->el('br');
 

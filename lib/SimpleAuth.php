@@ -153,6 +153,7 @@ class SimpleAuth {
 			return false;
 		}
 
+		error_log("log");
 		self::$user_id = (int)$rs->id;
 		self::update_access();
 		self::savesession();
@@ -718,7 +719,7 @@ class SimpleAuth {
 			}
 			self::$user_id = (int) $rs->user_id;
 			self::write_autologin_cookie();
-				self::update_access();
+			self::update_access();
 			self::savesession();
 			self::login_successful();
 		}
@@ -892,7 +893,7 @@ class SimpleAuth {
 	 * @return object (property: qr, hasSecret)
 	 * @throws \RobThree\Auth\TwoFactorAuthException
 	 */
-	public static function create_tfa_code(string $user_id, $username = null)
+	public static function create_tfa_code(string $user_id, $username = null, $issuer = 'SimpleAuth')
 	{
 		if(!self::tfa_supported()){
 			throw new \Exception('TFA_NOT_SUPPORTED');
@@ -907,13 +908,13 @@ class SimpleAuth {
 			$table = self::$db_pfix.'user';
 
 			self::open_db();
-			$sql = "UPDATE `$table` SET `tfa` = '$secret' WHERE `id` = '$user_id'";
+			$sql = "UPDATE `$table` SET `confirmationTfa` = '$secret' WHERE `id` = '$user_id'";
 			self::$db_conn->query($sql);
 		}
 
 		if(!$username) $username = self::username();
 		// Display as SimpleAuth:Username
-		$label = "SimpleAuth:" . $username;
+		$label = $issuer . ":" . $username;
 		$qrImgDataUri = $tfa->getQRCodeImageAsDataUri($label, $secret);
 
 		return (object) [
@@ -955,19 +956,31 @@ class SimpleAuth {
 		if (!$tfa) {
 			return false;
 		}
-
 		$secret = self::load_user_tfa_secret($user_id);
 		if (!$secret) {
-			return false;
+			$confirmationSecret = self::load_user_confirmation_tfa_secret($user_id);
+			if (!$confirmationSecret) {
+				return false;
+			}
+			$isValid = $tfa->verifyCode($confirmationSecret, $code, 2);
+
+			if($isValid){
+				$table = self::$db_pfix.'user';
+
+				self::open_db();
+				$sql = "UPDATE `$table` SET `tfa` = '$confirmationSecret' WHERE `id` = '$user_id'";
+				self::$db_conn->query($sql);
+			}
+			return $isValid;
 		}
 
 		return $tfa->verifyCode($secret, $code, 2);
 	}
 
 	/**
-	*
-	* Get user's 2fa secret from database.
-	*
+	 *
+	 * Get user's 2fa secret from database.
+	 *
 	 * @param string $user_id User's userId.
 	 * @return string|null
 	 * @throws Exception
@@ -979,8 +992,26 @@ class SimpleAuth {
 		$sql = "SELECT `tfa` FROM `$table` WHERE `id` = '$user_id'";
 		$query = self::$db_conn->query($sql);
 		$rs = $query->fetch_object();
-		if($rs->tfa === "") return null;
+		if($rs->tfa === null || $rs->tfa === "") return null;
 		return $rs->tfa;
+	}
+	/**
+	 *
+	 * Get user's 2fa secret from database.
+	 *
+	 * @param string $user_id User's userId.
+	 * @return string|null
+	 * @throws Exception
+	 */
+	private static function load_user_confirmation_tfa_secret(string $user_id)
+	{
+		self::open_db();
+		$table = self::$db_pfix.'user';
+		$sql = "SELECT `confirmationTfa` FROM `$table` WHERE `id` = '$user_id'";
+		$query = self::$db_conn->query($sql);
+		$rs = $query->fetch_object();
+		if($rs->confirmationTfa === null || $rs->confirmationTfa === "") return null;
+		return $rs->confirmationTfa;
 	}
 
 	/**
@@ -989,13 +1020,18 @@ class SimpleAuth {
 	 *
 	 * @return bool if the user has 2fa enabled.
 	 */
-	public static function has_tfa()
+	public static function has_tfa($username = null)
 	{
 		self::open_db();
 
 		$table = self::$db_pfix . 'user';
+		$user_id = null;
+		if($username) {
+			$user_id = self::get_user_id($username);
+		} else {
+			$user_id = self::$user_id;
+		}
 
-		$user_id = self::$user_id;
 		$sql = "SELECT `username`, `tfa` FROM `$table` WHERE `id` = '$user_id'";
 		$query = self::$db_conn->query($sql);
 		if ($query->num_rows !== 1) {
