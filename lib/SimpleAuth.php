@@ -153,7 +153,6 @@ class SimpleAuth {
 			return false;
 		}
 
-		error_log("log");
 		self::$user_id = (int)$rs->id;
 		self::update_access();
 		self::savesession();
